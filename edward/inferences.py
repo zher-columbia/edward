@@ -344,18 +344,20 @@ class MAP(VariationalInference):
     """
     Maximum a posteriori
     """
-    def __init__(self, model, data=Data(), transform=tf.identity):
+    def __init__(self, model, data=Data(), transform=tf.identity, local_transform=tf.identity):
         if hasattr(model, 'num_vars'):
             variational = Variational()
             variational.add(PointMass(model.num_vars, transform))
         else:
             variational = Variational()
             variational.add(PointMass(0, transform))
+        if hasattr(model, 'num__local_vars'):
+            variational.add(LocalPointMass(model.num_vars, local_transform))
 
         VariationalInference.__init__(self, model, variational, data)
 
     def build_loss(self):
-        x = self.data.sample(self.n_data)
-        z, _ = self.variational.sample(x)
+        idxs,x = self.data.sample(self.n_data,return_indices=True)
+        z, _ = self.variational.sample(x,idxs)
         self.loss = tf.squeeze(self.model.log_prob(x, z))
         return -self.loss

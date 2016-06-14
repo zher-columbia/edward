@@ -144,3 +144,47 @@ class PyMC3Model:
             lp[s] = self.logp(zs[s, :])
 
         return lp
+
+
+class ExponentialFamilyEmbeddingModel(PythonModel):
+    """
+    Model wrapper for exponential family embedding models.
+    """
+    def __init__(self):
+        PythonModel.__init__()
+
+    def natural_parameter(self, xs, zs):
+        """
+        Arguments
+        ----------
+        xs : np.ndarray
+
+        zs : np.ndarray
+            n_minibatch x dim(z) array, where each row is a set of
+            latent variables.
+
+        Returns
+        -------
+        np.ndarray
+            n_minibatch array of type np.float32, where each element
+            is the log pdf evaluated at (z_{b1}, ..., z_{bd})
+        """
+        raise NotImplementedError()
+
+    def _py_log_prob(self, xs, zs):
+        """
+        Arguments
+        ----------
+        xs : np.ndarray
+
+        zs : np.ndarray
+            n_minibatch x dim(z) array, where each row is a set of
+            latent variables.
+
+        Returns
+        -------
+        np.ndarray
+            n_minibatch array of type np.float32, where each element
+            is the log pdf evaluated at (z_{b1}, ..., z_{bd})
+        """
+        raise NotImplementedError()

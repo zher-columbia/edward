@@ -62,7 +62,7 @@ class Data:
         else:
             raise NotImplementedError()
 
-    def sample(self, n_data=None):
+    def sample(self, n_data=None, return_indices = False):
         # TODO
         # In general, there should be a scale factor due to data
         # subsampling, so that
@@ -73,41 +73,51 @@ class Data:
         if isinstance(self.data, tf.Tensor):
             counter_new = self.counter + n_data
             if counter_new <= self.N:
-                minibatch = tf.gather(self.data,
-                                      list(range(self.counter, counter_new)))
+                indices = list(range(self.counter, counter_new))
+                minibatch = tf.gather(self.data, indices)
             else:
                 counter_new = counter_new - self.N
-                minibatch = tf.gather(self.data,
-                                      list(range(self.counter, self.N)) + \
-                                      list(range(0, counter_new)))
+                indices = list(range(self.counter, self.N)) + list(range(0, counter_new))
+                minibatch = tf.gather(self.data, indices)
 
             self.counter = counter_new
+            if return_indices:
+                return indices, minibatch
             return minibatch
         elif isinstance(self.data, np.ndarray):
             counter_new = self.counter + n_data
             if counter_new <= self.N:
+                indices = list(range(self.counter, counter_new))
                 minibatch = self.data[self.counter:counter_new]
             else:
                 counter_new = counter_new - self.N
+                indices = list(range(self.counter, self.N)) + list(range(0, counter_new))
                 minibatch = np.concatenate((self.data[self.counter:],
                                             self.data[:counter_new]))
 
             self.counter = counter_new
+            if return_indices:
+                return indices, minibatch
             return minibatch
         elif isinstance(self.data, list):
             if isinstance(self.data[0], np.ndarray):
                 minibatch = [0]*len(self.data)
+                indices = [0]*len(self.data)
                 for i in range(len(self.data)):
                     counter_new = self.counter[i] + n_data
                     if counter_new <= self.N[i]:
+                        indices[i] = list(range(self.counter, counter_new))
                         minibatch[i] = self.data[i][self.counter[i]:counter_new]
                     else:
                         counter_new = counter_new - self.N[i]
+                        indices[i] = list(range(self.counter, self.N)) + list(range(0, counter_new))
                         minibatch[i] = np.concatenate((self.data[i][self.counter[i]:],
                                                        self.data[i][:counter_new]))
 
                     self.counter[i] = counter_new
 
+                if return_indices:
+                    return indices, minibatch
                 return minibatch
             else: # list of placeholders
                 raise NotImplementedError()

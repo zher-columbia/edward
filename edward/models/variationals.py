@@ -47,7 +47,7 @@ class Variational:
         self.is_normal = self.is_normal and isinstance(layer, Normal)
         self.sample_tensor += [layer.sample_tensor]
 
-    def sample(self, x, size=1):
+    def sample(self, x, size=1, data_indices=None):
         """
         Draws a mix of tensors and placeholders, corresponding to
         TensorFlow-based samplers and SciPy-based samplers depending
@@ -57,6 +57,7 @@ class Variational:
         ----------
         x : Data
         size : int, optional
+        data_indices: list of indices, optional
 
         Returns
         -------
@@ -73,6 +74,8 @@ class Variational:
         this method, log_prob_zi() is well-defined, even though
         mathematically it is a function of both z and x, and it only
         takes z as input.
+
+        The data indices are necessary to sample local variables.
         """
         self._set_params(self._mapping(x))
         samples = []
@@ -638,3 +641,15 @@ class PointMass(Likelihood):
         # a vector where the jth element is 1 if zs[j, i] is equal to
         # the ith parameter, 0 otherwise
         return tf.cast(tf.equal(zs[:, i], self.params[i]), dtype=tf.float32)
+
+class LocalPointMass(PointMass):
+    def __init__(self, num_local_vars, local_transform=tf.identity):
+        PointMass.__init__(self, num_local_vars, local_transform)
+
+    def sample(self, size=1):
+        # Return a matrix where each row is the same set of
+        # parameters. This is to be compatible with probability model
+        # methods which assume the input is possibly a mini-batch of
+        # parameter samples (as in black box variational methods).
+        return tf.pack([self.params]*size)
+
