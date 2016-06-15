@@ -352,12 +352,16 @@ class MAP(VariationalInference):
             variational = Variational()
             variational.add(PointMass(0, transform))
         if hasattr(model, 'num__local_vars'):
-            variational.add(LocalPointMass(model.num_vars, local_transform))
+            variational.add(LocalPointMass(model.num_local_vars, local_transform))
 
         VariationalInference.__init__(self, model, variational, data)
 
     def build_loss(self):
-        idxs,x = self.data.sample(self.n_data,return_indices=True)
-        z, _ = self.variational.sample(x,idxs)
+        data_indices,x = self.data.sample(self.n_data,return_indices=True)
+        if hasattr(model, 'map_data_indices'):
+            indices = model.map_data_indices(data_indices)
+        else:
+            indices = data_indices
+        z, _ = self.variational.sample(x,indices)
         self.loss = tf.squeeze(self.model.log_prob(x, z))
         return -self.loss

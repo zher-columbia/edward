@@ -47,7 +47,7 @@ class Variational:
         self.is_normal = self.is_normal and isinstance(layer, Normal)
         self.sample_tensor += [layer.sample_tensor]
 
-    def sample(self, x, size=1, data_indices=None):
+    def sample(self, x, size=1, indices=None):
         """
         Draws a mix of tensors and placeholders, corresponding to
         TensorFlow-based samplers and SciPy-based samplers depending
@@ -57,7 +57,7 @@ class Variational:
         ----------
         x : Data
         size : int, optional
-        data_indices: list of indices, optional
+        indices : optional
 
         Returns
         -------
@@ -74,14 +74,15 @@ class Variational:
         this method, log_prob_zi() is well-defined, even though
         mathematically it is a function of both z and x, and it only
         takes z as input.
-
-        The data indices are necessary to sample local variables.
         """
         self._set_params(self._mapping(x))
         samples = []
         for layer in self.layers:
             if layer.sample_tensor:
-                samples += [layer.sample(size)]
+                if layer.is_local:
+                    samples += [layer.sample(size,indices)]
+                else:
+                    samples += [layer.sample(size)]
             else:
                 samples += [tf.placeholder(tf.float32, (size, layer.num_vars))]
 
@@ -142,6 +143,7 @@ class Likelihood:
         self.num_vars = None # number of posterior latent variables
         self.num_params = None # number of variational parameters
         self.sample_tensor = False
+        self.is_local = False
 
     def mapping(self, x):
         """
@@ -645,11 +647,12 @@ class PointMass(Likelihood):
 class LocalPointMass(PointMass):
     def __init__(self, num_local_vars, local_transform=tf.identity):
         PointMass.__init__(self, num_local_vars, local_transform)
+        self.is_local = True
 
-    def sample(self, size=1):
+    def sample(self, indices, size=1):
         # Return a matrix where each row is the same set of
         # parameters. This is to be compatible with probability model
         # methods which assume the input is possibly a mini-batch of
         # parameter samples (as in black box variational methods).
-        return tf.pack([self.params]*size)
+        return tf.pack([self.params[indices]]*size)
 
