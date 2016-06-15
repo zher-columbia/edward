@@ -3,7 +3,7 @@ import numpy as np
 import tensorflow as tf
 
 from edward.data import Data
-from edward.models import Variational, PointMass
+from edward.models import Variational, PointMass, LocalPointMass
 from edward.util import kl_multivariate_normal, log_sum_exp, get_session
 
 try:
@@ -344,24 +344,25 @@ class MAP(VariationalInference):
     """
     Maximum a posteriori
     """
-    def __init__(self, model, data=Data(), transform=tf.identity, local_transform=tf.identity):
+    def __init__(self, model, data=Data(), n_minibatch=100, transform=tf.identity, local_transform=tf.identity):
         if hasattr(model, 'num_vars'):
             variational = Variational()
-            variational.add(PointMass(model.num_vars, transform))
+            #variational.add(PointMass(model.num_vars, transform))
         else:
             variational = Variational()
             variational.add(PointMass(0, transform))
-        if hasattr(model, 'num__local_vars'):
+        if hasattr(model, 'num_local_vars'):
             variational.add(LocalPointMass(model.num_local_vars, local_transform))
 
         VariationalInference.__init__(self, model, variational, data)
+        self.n_data_samples = 10
 
     def build_loss(self):
-        data_indices,x = self.data.sample(self.n_data,return_indices=True)
-        if hasattr(model, 'map_data_indices'):
-            indices = model.map_data_indices(data_indices)
+        data_indices, x = self.data.sample(self.n_data_samples,return_indices=True)
+        if hasattr(self.model, 'map_data_indices'):
+            indices = self.model.map_data_indices(data_indices)
         else:
             indices = data_indices
-        z, _ = self.variational.sample(x,indices)
-        self.loss = tf.squeeze(self.model.log_prob(x, z))
+        z, _ = self.variational.sample(x,1,indices)
+        self.loss = tf.squeeze(self.model.log_prob(x, z, self.n_data_samples))
         return -self.loss

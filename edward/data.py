@@ -83,7 +83,8 @@ class Data:
             self.counter = counter_new
             if return_indices:
                 return indices, minibatch
-            return minibatch
+            else:
+                return minibatch
         elif isinstance(self.data, np.ndarray):
             counter_new = self.counter + n_data
             if counter_new <= self.N:
@@ -98,7 +99,8 @@ class Data:
             self.counter = counter_new
             if return_indices:
                 return indices, minibatch
-            return minibatch
+            else:
+                return minibatch
         elif isinstance(self.data, list):
             if isinstance(self.data[0], np.ndarray):
                 minibatch = [0]*len(self.data)
@@ -118,7 +120,8 @@ class Data:
 
                 if return_indices:
                     return indices, minibatch
-                return minibatch
+                else:
+                    return minibatch
             else: # list of placeholders
                 raise NotImplementedError()
         else: # dict

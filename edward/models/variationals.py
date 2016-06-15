@@ -80,7 +80,7 @@ class Variational:
         for layer in self.layers:
             if layer.sample_tensor:
                 if layer.is_local:
-                    samples += [layer.sample(size,indices)]
+                    samples += [layer.sample(indices,size)]
                 else:
                     samples += [layer.sample(size)]
             else:
@@ -654,5 +654,8 @@ class LocalPointMass(PointMass):
         # parameters. This is to be compatible with probability model
         # methods which assume the input is possibly a mini-batch of
         # parameter samples (as in black box variational methods).
-        return tf.pack([self.params[indices]]*size)
+        print(size)
+        if size >1:
+            raise ValueError("Not implemented for size >1.")
+        return tf.pack([tf.gather(self.params,indices)]*size)
 

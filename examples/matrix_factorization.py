@@ -97,46 +97,41 @@ class MatrixFactorization:
         and for each column j we add the parameters
         [(N+j)*K : (N+j)*K + K-1]
         
-
+        Note: there could be duplicates in the returned indices
         """
-        indices = []
+        a_indices = []
+        b_indices = []
         for l in data_indices:
             i = l/self.M
             j = l%self.M
-            indices = indices + list(range(i*self.K,(i+1)*self.K))
-            indices = indices + list(range((N+j)*self.K,(N+j+1)*self.K))
-        return indices
+            a_indices = a_indices + list(range(i*self.K,(i+1)*self.K))
+            b_indices = b_indices + list(range((self.N+j)*self.K,(self.N+j+1)*self.K))
+        return a_indices + b_indices
 
-    def log_prob(self, xs, zs):
+    def log_prob(self, xs, zs, n_minibatch):
         """Returns a vector [log p(xs, zs[1,:]), ..., log p(xs, zs[S,:])]."""
-        log_prior = -self.prior_variance * tf.reduce_sum(zs*zs, 1)
-        # broadcasting to do (x*W) + b (n_data x n_minibatch - n_minibatch)
-        x = tf.expand_dims(x, 1)
-        W = tf.expand_dims(zs[:, 0], 0)
-        b = zs[:, 1]
-        mus = tf.matmul(x, W) + b
+        log_prior = -self.prior_variance * tf.reduce_sum(zs*zs)
+        # reshaping the latent variable
+        a = tf.reshape(zs[:,:n_minibatch*self.K],[n_minibatch,self.K])
+        b = tf.reshape(zs[:,n_minibatch*self.K:],[n_minibatch,self.K])
+        mus = tf.matmul(tf.mul(a,b),tf.ones([self.K,1]))
         # broadcasting to do mus - y (n_data x n_minibatch - n_data)
-        y = tf.expand_dims(y, 1)
-        log_lik = -tf.reduce_sum(tf.pow(mus - y, 2), 0) / self.lik_variance
+        log_lik = -tf.reduce_sum(tf.pow(mus - xs, 2), [0,1]) / self.lik_variance*self.N/n_minibatch
         return log_lik + log_prior
 
-def build_toy_dataset(n_data=40, noise_std=0.1):
+def build_toy_dataset(N=10,K=2, noise_std=0.1):
     ed.set_seed(0)
-    x  = np.concatenate([np.linspace(0, 2, num=n_data/2),
-                         np.linspace(6, 8, num=n_data/2)])
-    y = 0.075*x + norm.rvs(0, noise_std, size=n_data)
-    x = (x - 4.0) / 4.0
-    x = x.reshape((n_data, 1))
-    y = y.reshape((n_data, 1))
-    data = np.concatenate((y, x), axis=1) # n_data x 2
-    data = tf.constant(data, dtype=tf.float32)
-    return ed.Data(data)
+    a = tf.random_normal([N, K], mean=0, stddev=1)
+    b = tf.random_normal([N, K], mean=0, stddev=1)
+    noise = tf.random_normal([N, N], mean=0, stddev=noise_std)
+    data = tf.matmul(a,b,transpose_b=True) + noise
+    return ed.Data(data), a, b
 
 ed.set_seed(42)
-model = LinearModel()
-variational = Variational()
-variational.add(Normal(model.num_vars))
-data = build_toy_dataset()
+N = 1000
+K = 100
+data, a, b = build_toy_dataset(N,K)
+model = MatrixFactorization(N,K)
 
-inference = ed.MFVI(model, variational, data)
-inference.run(n_iter=250, n_minibatch=5, n_print=10)
+inference = ed.MAP(model, data, n_minibatch =100)
+inference.run(n_iter=500, n_print=10)
