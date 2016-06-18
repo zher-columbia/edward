@@ -116,22 +116,22 @@ class MatrixFactorization:
         b = tf.reshape(zs[:,n_minibatch*self.K:],[n_minibatch,self.K])
         mus = tf.matmul(tf.mul(a,b),tf.ones([self.K,1]))
         # broadcasting to do mus - y (n_data x n_minibatch - n_data)
-        log_lik = -tf.reduce_sum(tf.pow(mus - xs, 2), [0,1]) / self.lik_variance*self.N/n_minibatch
-        return log_lik + log_prior
+        log_lik = -tf.reduce_sum(tf.pow(mus - xs, 2), [0,1]) / self.lik_variance
+        return log_lik + log_prior *n_minibatch/self.N/self.M
 
 def build_toy_dataset(N=10,K=2, noise_std=0.1):
     ed.set_seed(0)
-    a = tf.random_normal([N, K], mean=0, stddev=1)
-    b = tf.random_normal([N, K], mean=0, stddev=1)
-    noise = tf.random_normal([N, N], mean=0, stddev=noise_std)
+    a = tf.constant(np.random.randn(N, K))
+    b = tf.constant(np.random.randn(N, K))
+    noise = tf.constant(np.random.randn(N,N)*0.1)
     data = tf.matmul(a,b,transpose_b=True) + noise
     return ed.Data(data), a, b
 
 ed.set_seed(42)
-N = 1000
-K = 100
+N = 300
+K = 5
 data, a, b = build_toy_dataset(N,K)
 model = MatrixFactorization(N,K)
 
-inference = ed.MAP(model, data, n_minibatch =100)
-inference.run(n_iter=500, n_print=10)
+inference = ed.MAP(model, data, n_minibatch =1,data_samples=N*N)
+inference.run(n_iter=500*N*N, n_print=10)

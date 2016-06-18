@@ -66,10 +66,11 @@ class VariationalInference(Inference):
         for t in range(self.n_iter):
             loss = self.update()
             self.print_progress(t, loss)
+        return self.variational
 
 
     def initialize(self, n_iter=1000, n_data=None, n_print=100,
-        optimizer=None):
+        optimizer=None,learning_rate=0.1):
         """
         Initialize inference algorithm.
 
@@ -93,17 +94,34 @@ class VariationalInference(Inference):
         self.loss = tf.constant(0.0)
 
         loss = self.build_loss()
-        if optimizer == None:
+        if optimizer == 'RMSProp':
+            # Use RMSProp with a decaying scale factor
+            global_step = tf.Variable(0, trainable=False)
+            starter_learning_rate = learning_rate
+            #learning_rate = tf.train.exponential_decay(starter_learning_rate,
+            #                                    global_step,
+            #                                    100, 0.9, staircase=True)
+            learning_rate = learning_rate
+            optimizer = tf.train.RMSPropOptimizer(learning_rate)
+            self.train = optimizer.minimize(loss, global_step=global_step)
+
+        elif optimizer == 'gradient descent':
+            learning_rate = learning_rate
+            #global_step = tf.Variable(1, trainable=False)
+            optimizer = tf.train.GradientDescentOptimizer(learning_rate)
+            self.train = optimizer.minimize(loss)#, global_step=global_step)
+
+        elif optimizer == None:
             # Use ADAM with a decaying scale factor
             global_step = tf.Variable(0, trainable=False)
-            starter_learning_rate = 0.1
+            starter_learning_rate = learning_rate
             learning_rate = tf.train.exponential_decay(starter_learning_rate,
                                                 global_step,
                                                 100, 0.9, staircase=True)
             optimizer = tf.train.AdamOptimizer(learning_rate)
             self.train = optimizer.minimize(loss, global_step=global_step)
         else:
-            optimizer = tf.train.AdamOptimizer(0.01, epsilon=1.0)
+            optimizer = tf.train.AdamOptimizer(learning_rate, epsilon=1.0)
             self.train = pt.apply_optimizer(optimizer, losses=[loss])
 
         init = tf.initialize_all_variables()
@@ -344,18 +362,17 @@ class MAP(VariationalInference):
     """
     Maximum a posteriori
     """
-    def __init__(self, model, data=Data(), n_minibatch=100, transform=tf.identity, local_transform=tf.identity):
+    def __init__(self, model, data=Data(), n_minibatch=100, n_data_samples=100, transform=tf.identity, local_transform=tf.identity):
+        variational = Variational()
         if hasattr(model, 'num_vars'):
-            variational = Variational()
-            #variational.add(PointMass(model.num_vars, transform))
-        else:
-            variational = Variational()
-            variational.add(PointMass(0, transform))
+            variational.add(PointMass(model.num_vars, transform))
         if hasattr(model, 'num_local_vars'):
-            variational.add(LocalPointMass(model.num_local_vars, local_transform))
+            variational.add(PointMass(model.num_local_vars, local_transform),is_local=True )
+        if (not hasattr(model,'num_vars')) and (not hasattr(model,'num_local_vars')):
+            variational.add(PointMass(0, transform))
 
         VariationalInference.__init__(self, model, variational, data)
-        self.n_data_samples = 10
+        self.n_data_samples = n_data_samples
 
     def build_loss(self):
         data_indices, x = self.data.sample(self.n_data_samples,return_indices=True)
@@ -364,5 +381,6 @@ class MAP(VariationalInference):
         else:
             indices = data_indices
         z, _ = self.variational.sample(x,1,indices)
-        self.loss = tf.squeeze(self.model.log_prob(x, z, self.n_data_samples))
+        #self.loss = tf.squeeze(self.model.log_prob(x, z, self.n_data_samples))
+        self.loss = tf.squeeze(self.model.log_prob(x, z))
         return -self.loss
