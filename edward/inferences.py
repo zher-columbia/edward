@@ -69,7 +69,7 @@ class VariationalInference(Inference):
         return self.variational
 
 
-    def initialize(self, n_iter=1000, n_data=None, n_print=100,
+    def initialize(self, n_iter=1000, n_minibatch=None, n_print=100,
         optimizer=None,learning_rate=0.1):
         """
         Initialize inference algorithm.
@@ -78,7 +78,7 @@ class VariationalInference(Inference):
         ----------
         n_iter : int, optional
             Number of iterations for optimization.
-        n_data : int, optional
+        n_minibatch : int, optional
             Number of samples for data subsampling. Default is to use all
             the data.
         n_print : int, optional
@@ -88,7 +88,7 @@ class VariationalInference(Inference):
             optimizer if using PrettyTensor. Defaults to TensorFlow.
         """
         self.n_iter = n_iter
-        self.n_data = n_data
+        self.n_minibatch = n_minibatch
         self.n_print = n_print
 
         self.loss = tf.constant(0.0)
@@ -149,11 +149,11 @@ class MFVI(VariationalInference):
     def __init__(self, *args, **kwargs):
         VariationalInference.__init__(self, *args, **kwargs)
 
-    def initialize(self, n_minibatch=1, score=None, *args, **kwargs):
+    def initialize(self, n_samples=1, score=None, *args, **kwargs):
         """
         Parameters
         ----------
-        n_minibatch : int, optional
+        n_samples : int, optional
             Number of samples from variational model for calculating
             stochastic gradients.
         score : bool, optional
@@ -166,12 +166,12 @@ class MFVI(VariationalInference):
         else:
             self.score = True
 
-        self.n_minibatch = n_minibatch
+        self.n_samples = n_samples
         return VariationalInference.initialize(self, *args, **kwargs)
 
     def update(self):
         sess = get_session()
-        feed_dict = self.variational.np_sample(self.samples, self.n_minibatch)
+        feed_dict = self.variational.np_sample(self.samples, self.n_samples)
         _, loss = sess.run([self.train, self.loss], feed_dict)
         return loss
 
@@ -201,10 +201,10 @@ class MFVI(VariationalInference):
 
         ELBO = E_{q(z; lambda)} [ log p(x, z) - log q(z; lambda) ]
         """
-        x = self.data.sample(self.n_data)
-        z, self.samples = self.variational.sample(x, self.n_minibatch)
+        x = self.data.sample(self.n_minibatch)
+        z, self.samples = self.variational.sample(x, self.n_samples)
 
-        q_log_prob = tf.zeros([self.n_minibatch], dtype=tf.float32)
+        q_log_prob = tf.zeros([self.n_samples], dtype=tf.float32)
         for i in range(self.variational.n_factors):
             q_log_prob += self.variational.log_prob_zi(i, tf.stop_gradient(z))
 
@@ -220,10 +220,10 @@ class MFVI(VariationalInference):
 
         ELBO = E_{q(z; lambda)} [ log p(x, z) - log q(z; lambda) ]
         """
-        x = self.data.sample(self.n_data)
-        z, self.samples = self.variational.sample(x, self.n_minibatch)
+        x = self.data.sample(self.n_minibatch)
+        z, self.samples = self.variational.sample(x, self.n_samples)
 
-        q_log_prob = tf.zeros([self.n_minibatch], dtype=tf.float32)
+        q_log_prob = tf.zeros([self.n_samples], dtype=tf.float32)
         for i in range(self.variational.n_factors):
             q_log_prob += self.variational.log_prob_zi(i, z)
 
@@ -240,10 +240,10 @@ class MFVI(VariationalInference):
 
         It assumes the model prior is p(z) = N(z; 0, 1).
         """
-        x = self.data.sample(self.n_data)
-        z, self.samples = self.variational.sample(x, self.n_minibatch)
+        x = self.data.sample(self.n_minibatch)
+        z, self.samples = self.variational.sample(x, self.n_samples)
 
-        q_log_prob = tf.zeros([self.n_minibatch], dtype=tf.float32)
+        q_log_prob = tf.zeros([self.n_samples], dtype=tf.float32)
         for i in range(self.variational.n_factors):
             q_log_prob += self.variational.log_prob_zi(i, tf.stop_gradient(z))
 
@@ -262,10 +262,10 @@ class MFVI(VariationalInference):
         ELBO = E_{q(z; lambda)} [ log p(x, z) ] + H(q(z; lambda))
         where entropy is analytic
         """
-        x = self.data.sample(self.n_data)
-        z, self.samples = self.variational.sample(x, self.n_minibatch)
+        x = self.data.sample(self.n_minibatch)
+        z, self.samples = self.variational.sample(x, self.n_samples)
 
-        q_log_prob = tf.zeros([self.n_minibatch], dtype=tf.float32)
+        q_log_prob = tf.zeros([self.n_samples], dtype=tf.float32)
         for i in range(self.variational.n_factors):
             q_log_prob += self.variational.log_prob_zi(i, tf.stop_gradient(z))
 
@@ -285,8 +285,8 @@ class MFVI(VariationalInference):
 
         It assumes the model prior is p(z) = N(z; 0, 1).
         """
-        x = self.data.sample(self.n_data)
-        z, self.samples = self.variational.sample(x, self.n_minibatch)
+        x = self.data.sample(self.n_minibatch)
+        z, self.samples = self.variational.sample(x, self.n_samples)
 
         mu = tf.pack([layer.m for layer in self.variational.layers])
         sigma = tf.pack([layer.s for layer in self.variational.layers])
@@ -302,8 +302,8 @@ class MFVI(VariationalInference):
         ELBO = E_{q(z; lambda)} [ log p(x, z) ] + H(q(z; lambda))
         where entropy is analytic
         """
-        x = self.data.sample(self.n_data)
-        z, self.samples = self.variational.sample(x, self.n_minibatch)
+        x = self.data.sample(self.n_minibatch)
+        z, self.samples = self.variational.sample(x, self.n_samples)
         self.loss = tf.reduce_mean(self.model.log_prob(x, z)) + \
                     self.variational.entropy()
         return -self.loss
@@ -317,13 +317,13 @@ class KLpq(VariationalInference):
     def __init__(self, *args, **kwargs):
         VariationalInference.__init__(self, *args, **kwargs)
 
-    def initialize(self, n_minibatch=1, *args, **kwargs):
-        self.n_minibatch = n_minibatch
+    def initialize(self, n_samples=1, *args, **kwargs):
+        self.n_samples = n_samples
         return VariationalInference.initialize(self, *args, **kwargs)
 
     def update(self):
         sess = get_session()
-        feed_dict = self.variational.np_sample(self.samples, self.n_minibatch)
+        feed_dict = self.variational.np_sample(self.samples, self.n_samples)
         _, loss = sess.run([self.train, self.loss], feed_dict)
         return loss
 
@@ -340,10 +340,10 @@ class KLpq(VariationalInference):
         #
         # gradient = - E_{q(z; lambda)} [ w_norm(z; lambda) *
         #                                 grad_{lambda} log q(z; lambda) ]
-        x = self.data.sample(self.n_data)
-        z, self.samples = self.variational.sample(x, self.n_minibatch)
+        x = self.data.sample(self.n_minibatch)
+        z, self.samples = self.variational.sample(x, self.n_samples)
 
-        q_log_prob = tf.zeros([self.n_minibatch], dtype=tf.float32)
+        q_log_prob = tf.zeros([self.n_samples], dtype=tf.float32)
         for i in range(self.variational.n_factors):
             q_log_prob += self.variational.log_prob_zi(i, z)
 
@@ -362,25 +362,22 @@ class MAP(VariationalInference):
     """
     Maximum a posteriori
     """
-    def __init__(self, model, data=Data(), n_minibatch=100, n_data_samples=100, transform=tf.identity, local_transform=tf.identity):
+    def __init__(self, model, data=Data(), n_minibatch=100, n_samples=100, transform=tf.identity, local_transform=tf.identity):
         variational = Variational()
         if hasattr(model, 'n_vars'):
             variational.add(PointMass(model.n_vars, transform))
-        if hasattr(model, 'n_local_vars'):
-            variational.add(PointMass(model.n_local_vars, local_transform),is_local=True )
-        if (not hasattr(model,'n_vars')) and (not hasattr(model,'n_local_vars')):
+        else:
             variational.add(PointMass(0, transform))
 
         VariationalInference.__init__(self, model, variational, data)
-        self.n_data_samples = n_data_samples
+        self.n_minibatch = n_minibatch
 
     def build_loss(self):
-        data_indices, x = self.data.sample(self.n_data_samples,return_indices=True)
+        data_indices, x = self.data.sample(self.n_minibatch,return_indices=True)
         if hasattr(self.model, 'map_data_indices'):
             indices = self.model.map_data_indices(data_indices)
         else:
             indices = data_indices
         z, _ = self.variational.sample(x,1,indices)
-        #self.loss = tf.squeeze(self.model.log_prob(x, z, self.n_data_samples))
         self.loss = tf.squeeze(self.model.log_prob(x, z))
         return -self.loss
