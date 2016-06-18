@@ -205,7 +205,7 @@ class MFVI(VariationalInference):
         z, self.samples = self.variational.sample(x, self.n_minibatch)
 
         q_log_prob = tf.zeros([self.n_minibatch], dtype=tf.float32)
-        for i in range(self.variational.num_factors):
+        for i in range(self.variational.n_factors):
             q_log_prob += self.variational.log_prob_zi(i, tf.stop_gradient(z))
 
         losses = self.model.log_prob(x, z) - q_log_prob
@@ -224,7 +224,7 @@ class MFVI(VariationalInference):
         z, self.samples = self.variational.sample(x, self.n_minibatch)
 
         q_log_prob = tf.zeros([self.n_minibatch], dtype=tf.float32)
-        for i in range(self.variational.num_factors):
+        for i in range(self.variational.n_factors):
             q_log_prob += self.variational.log_prob_zi(i, z)
 
         self.loss = tf.reduce_mean(self.model.log_prob(x, z) - q_log_prob)
@@ -244,7 +244,7 @@ class MFVI(VariationalInference):
         z, self.samples = self.variational.sample(x, self.n_minibatch)
 
         q_log_prob = tf.zeros([self.n_minibatch], dtype=tf.float32)
-        for i in range(self.variational.num_factors):
+        for i in range(self.variational.n_factors):
             q_log_prob += self.variational.log_prob_zi(i, tf.stop_gradient(z))
 
         p_log_lik = self.model.log_lik(x, z)
@@ -266,7 +266,7 @@ class MFVI(VariationalInference):
         z, self.samples = self.variational.sample(x, self.n_minibatch)
 
         q_log_prob = tf.zeros([self.n_minibatch], dtype=tf.float32)
-        for i in range(self.variational.num_factors):
+        for i in range(self.variational.n_factors):
             q_log_prob += self.variational.log_prob_zi(i, tf.stop_gradient(z))
 
         p_log_prob = self.model.log_prob(x, z)
@@ -344,7 +344,7 @@ class KLpq(VariationalInference):
         z, self.samples = self.variational.sample(x, self.n_minibatch)
 
         q_log_prob = tf.zeros([self.n_minibatch], dtype=tf.float32)
-        for i in range(self.variational.num_factors):
+        for i in range(self.variational.n_factors):
             q_log_prob += self.variational.log_prob_zi(i, z)
 
         # 1/B sum_{b=1}^B grad_log_q * w_norm
@@ -364,11 +364,11 @@ class MAP(VariationalInference):
     """
     def __init__(self, model, data=Data(), n_minibatch=100, n_data_samples=100, transform=tf.identity, local_transform=tf.identity):
         variational = Variational()
-        if hasattr(model, 'num_vars'):
-            variational.add(PointMass(model.num_vars, transform))
-        if hasattr(model, 'num_local_vars'):
-            variational.add(PointMass(model.num_local_vars, local_transform),is_local=True )
-        if (not hasattr(model,'num_vars')) and (not hasattr(model,'num_local_vars')):
+        if hasattr(model, 'n_vars'):
+            variational.add(PointMass(model.n_vars, transform))
+        if hasattr(model, 'n_local_vars'):
+            variational.add(PointMass(model.n_local_vars, local_transform),is_local=True )
+        if (not hasattr(model,'n_vars')) and (not hasattr(model,'n_local_vars')):
             variational.add(PointMass(0, transform))
 
         VariationalInference.__init__(self, model, variational, data)

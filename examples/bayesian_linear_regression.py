@@ -38,7 +38,7 @@ class LinearModel:
     def __init__(self, lik_variance=0.01, prior_variance=0.01):
         self.lik_variance = lik_variance
         self.prior_variance = prior_variance
-        self.num_vars = 2
+        self.n_vars = 2
 
     def log_prob(self, xs, zs):
         """Returns a vector [log p(xs, zs[1,:]), ..., log p(xs, zs[S,:])]."""
@@ -71,7 +71,7 @@ def build_toy_dataset(n_data=40, noise_std=0.1):
 ed.set_seed(42)
 model = LinearModel()
 variational = Variational()
-variational.add(Normal(model.num_vars))
+variational.add(Normal(model.n_vars))
 data = build_toy_dataset()
 
 inference = ed.MFVI(model, variational, data)

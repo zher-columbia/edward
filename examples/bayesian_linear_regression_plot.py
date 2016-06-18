@@ -39,7 +39,7 @@ class LinearModel:
     def __init__(self, lik_variance=0.01, prior_variance=0.01):
         self.lik_variance = lik_variance
         self.prior_variance = prior_variance
-        self.num_vars = 2
+        self.n_vars = 2
 
     def log_prob(self, xs, zs):
         """Returns a vector [log p(xs, zs[1,:]), ..., log p(xs, zs[S,:])]."""
@@ -72,7 +72,7 @@ def build_toy_dataset(n_data=40, noise_std=0.1):
 ed.set_seed(42)
 model = LinearModel()
 variational = Variational()
-variational.add(Normal(model.num_vars))
+variational.add(Normal(model.n_vars))
 data = build_toy_dataset()
 
 # Set up figure
@@ -93,7 +93,7 @@ for t in range(250):
         mean, std = sess.run([variational.layers[0].m,
                               variational.layers[0].s])
         rs = np.random.RandomState(0)
-        zs = rs.randn(10, variational.num_vars) * std + mean
+        zs = rs.randn(10, variational.n_vars) * std + mean
         zs = tf.constant(zs, dtype=tf.float32)
         inputs = np.linspace(-8, 8, num=400, dtype=np.float32)
         x = tf.expand_dims(tf.constant(inputs), 1)

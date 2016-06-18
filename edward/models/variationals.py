@@ -11,17 +11,17 @@ class Variational:
         get_session()
         self.layers = layers
         if layers == []:
-            self.num_factors = 0
-            self.num_vars = 0
-            self.num_params = 0
+            self.n_factors = 0
+            self.n_vars = 0
+            self.n_params = 0
             self.is_reparam = True
             self.is_normal = True
             self.is_entropy = True
             self.sample_tensor = []
         else:
-            self.num_factors = sum([layer.num_factors for layer in self.layers])
-            self.num_vars = sum([layer.num_vars for layer in self.layers])
-            self.num_params = sum([layer.num_params for layer in self.layers])
+            self.n_factors = sum([layer.n_factors for layer in self.layers])
+            self.n_vars = sum([layer.n_vars for layer in self.layers])
+            self.n_params = sum([layer.n_params for layer in self.layers])
             self.is_reparam = all(['reparam' in layer.__class__.__dict__
                                    for layer in self.layers])
             self.is_normal = all([isinstance(layer, Normal)
@@ -39,9 +39,9 @@ class Variational:
             layer: layer instance.
         """
         self.layers += [layer]
-        self.num_factors += layer.num_factors
-        self.num_vars += layer.num_vars
-        self.num_params += layer.num_params
+        self.n_factors += layer.n_factors
+        self.n_vars += layer.n_vars
+        self.n_params += layer.n_params
         self.is_reparam = self.is_reparam and 'reparam' in layer.__class__.__dict__
         self.is_entropy = self.is_entropy and 'entropy' in layer.__class__.__dict__
         self.is_normal = self.is_normal and isinstance(layer, Normal)
@@ -84,7 +84,7 @@ class Variational:
                 else:
                     samples += [layer.sample(size)]
             else:
-                samples += [tf.placeholder(tf.float32, (size, layer.num_vars))]
+                samples += [tf.placeholder(tf.float32, (size, layer.n_vars))]
 
         return tf.concat(1, samples), samples
 
@@ -106,11 +106,11 @@ class Variational:
     def log_prob_zi(self, i, zs):
         start = final = 0
         for layer in self.layers:
-            final += layer.num_vars
-            if i < layer.num_factors:
+            final += layer.n_vars
+            if i < layer.n_factors:
                 return layer.log_prob_zi(i, zs[:, start:final])
 
-            i = i - layer.num_factors
+            i = i - layer.n_factors
             start = final
 
         raise IndexError()
@@ -134,14 +134,14 @@ class Likelihood:
 
     Parameters
     ----------
-    num_factors : int
+    n_factors : int
         Number of factors. Default is 1.
     """
-    def __init__(self, num_factors=1):
+    def __init__(self, n_factors=1):
         get_session()
-        self.num_factors = num_factors
-        self.num_vars = None # number of posterior latent variables
-        self.num_params = None # number of variational parameters
+        self.n_factors = n_factors
+        self.n_vars = None # number of posterior latent variables
+        self.n_params = None # number of variational parameters
         self.sample_tensor = False
         self.is_local = False
 
@@ -258,7 +258,7 @@ class Likelihood:
         i : int
             Index of the factor to take the log density of.
         zs : np.array
-            n_minibatch x num_vars
+            n_minibatch x n_vars
 
         Returns
         -------
@@ -286,14 +286,14 @@ class Bernoulli(Likelihood):
     """
     def __init__(self, *args, **kwargs):
         Likelihood.__init__(self, *args, **kwargs)
-        self.num_vars = self.num_factors
-        self.num_params = self.num_factors
+        self.n_vars = self.n_factors
+        self.n_params = self.n_factors
         self.sample_tensor = False
 
         self.p = None
 
     def mapping(self, x):
-        p = Variable("p", [self.num_params])
+        p = Variable("p", [self.n_params])
         return [tf.sigmoid(p)]
 
     def set_params(self, params):
@@ -307,15 +307,15 @@ class Bernoulli(Likelihood):
     def sample(self, size=1):
         """z ~ q(z | lambda)"""
         p = self.p.eval()
-        z = np.zeros((size, self.num_vars))
-        for d in range(self.num_vars):
+        z = np.zeros((size, self.n_vars))
+        for d in range(self.n_vars):
             z[:, d] = bernoulli.rvs(p[d], size=size)
 
         return z
 
     def log_prob_zi(self, i, zs):
         """log q(z_i | lambda)"""
-        if i >= self.num_factors:
+        if i >= self.n_factors:
             raise IndexError()
 
         return bernoulli.logpmf(zs[:, i], self.p[i])
@@ -330,16 +330,16 @@ class Beta(Likelihood):
     """
     def __init__(self, *args, **kwargs):
         Likelihood.__init__(self, *args, **kwargs)
-        self.num_vars = self.num_factors
-        self.num_params = 2*self.num_factors
+        self.n_vars = self.n_factors
+        self.n_params = 2*self.n_factors
         self.sample_tensor = False
 
         self.a = None
         self.b = None
 
     def mapping(self, x):
-        alpha = Variable("alpha", [self.num_vars])
-        beta = Variable("beta", [self.num_vars])
+        alpha = Variable("alpha", [self.n_vars])
+        beta = Variable("beta", [self.n_vars])
         return [tf.nn.softplus(alpha), tf.nn.softplus(beta)]
 
     def set_params(self, params):
@@ -358,15 +358,15 @@ class Beta(Likelihood):
         """z ~ q(z | lambda)"""
         sess = get_session()
         a, b = sess.run([self.a, self.b])
-        z = np.zeros((size, self.num_vars))
-        for d in range(self.num_vars):
+        z = np.zeros((size, self.n_vars))
+        for d in range(self.n_vars):
             z[:, d] = beta.rvs(a[d], b[d], size=size)
 
         return z
 
     def log_prob_zi(self, i, zs):
         """log q(z_i | lambda)"""
-        if i >= self.num_factors:
+        if i >= self.n_factors:
             raise IndexError()
 
         return beta.logpdf(zs[:, i], self.a[i], self.b[i])
@@ -380,17 +380,17 @@ class Dirichlet(Likelihood):
     where z is a flattened vector such that z_i represents
     the ith factor z[(i-1)*K:i*K], and lambda = alpha.
     """
-    def __init__(self, num_factors, K):
-        Likelihood.__init__(self, num_factors)
-        self.num_vars = K*num_factors
-        self.num_params = K*num_factors
+    def __init__(self, n_factors, K):
+        Likelihood.__init__(self, n_factors)
+        self.n_vars = K*n_factors
+        self.n_params = K*n_factors
         self.K = K # dimension of each factor
         self.sample_tensor = False
 
         self.alpha = None
 
     def mapping(self, x):
-        alpha = Variable("dirichlet_alpha", [self.num_factors, self.K])
+        alpha = Variable("dirichlet_alpha", [self.n_factors, self.K])
         return [tf.nn.softplus(alpha)]
 
     def set_params(self, params):
@@ -404,8 +404,8 @@ class Dirichlet(Likelihood):
     def sample(self, size=1):
         """z ~ q(z | lambda)"""
         alpha = self.alpha.eval()
-        z = np.zeros((size, self.num_vars))
-        for i in range(self.num_factors):
+        z = np.zeros((size, self.n_vars))
+        for i in range(self.n_factors):
             z[:, (i*self.K):((i+1)*self.K)] = dirichlet.rvs(alpha[i, :],
                                                             size=size)
 
@@ -415,7 +415,7 @@ class Dirichlet(Likelihood):
         """log q(z_i | lambda)"""
         # Note this calculates the log density with respect to z_i,
         # which is the ith factor and not the ith latent variable.
-        if i >= self.num_factors:
+        if i >= self.n_factors:
             raise IndexError()
 
         return dirichlet.logpdf(zs[:, (i*self.K):((i+1)*self.K)],
@@ -431,16 +431,16 @@ class InvGamma(Likelihood):
     """
     def __init__(self, *args, **kwargs):
         Likelihood.__init__(self, *args, **kwargs)
-        self.num_vars = self.num_factors
-        self.num_params = 2*self.num_factors
+        self.n_vars = self.n_factors
+        self.n_params = 2*self.n_factors
         self.sample_tensor = False
 
         self.a = None
         self.b = None
 
     def mapping(self, x):
-        alpha = Variable("alpha", [self.num_vars])
-        beta = Variable("beta", [self.num_vars])
+        alpha = Variable("alpha", [self.n_vars])
+        beta = Variable("beta", [self.n_vars])
         return [tf.nn.softplus(alpha)+1e-2, tf.nn.softplus(beta)+1e-2]
 
     def set_params(self, params):
@@ -459,15 +459,15 @@ class InvGamma(Likelihood):
         """z ~ q(z | lambda)"""
         sess = get_session()
         a, b = sess.run([self.a, self.b])
-        z = np.zeros((size, self.num_vars))
-        for d in range(self.num_vars):
+        z = np.zeros((size, self.n_vars))
+        for d in range(self.n_vars):
             z[:, d] = invgamma.rvs(a[d], b[d], size=size)
 
         return z
 
     def log_prob_zi(self, i, zs):
         """log q(z_i | lambda)"""
-        if i >= self.num_factors:
+        if i >= self.n_factors:
             raise IndexError()
 
         return invgamma.logpdf(zs[:, i], self.a[i], self.b[i])
@@ -486,13 +486,13 @@ class Multinomial(Likelihood):
     For each factor (multinomial distribution), it assumes a single
     trial (n=1) when sampling and calculating the density.
     """
-    def __init__(self, num_factors, K):
+    def __init__(self, n_factors, K):
         if K == 1:
             raise ValueError("Multinomial is not supported for K=1. Use Bernoulli.")
 
-        Likelihood.__init__(self, num_factors)
-        self.num_vars = K*num_factors
-        self.num_params = K*num_factors
+        Likelihood.__init__(self, n_factors)
+        self.n_vars = K*n_factors
+        self.n_params = K*n_factors
         self.K = K # dimension of each factor
         self.sample_tensor = False
 
@@ -500,11 +500,11 @@ class Multinomial(Likelihood):
 
     def mapping(self, x):
         # Transform a real (K-1)-vector to K-dimensional simplex.
-        pi = Variable("pi", [self.num_factors, self.K-1])
+        pi = Variable("pi", [self.n_factors, self.K-1])
         eq = -tf.log(tf.cast(self.K - 1 - tf.range(self.K-1), dtype=tf.float32))
         z = tf.sigmoid(eq + pi)
-        pil = tf.concat(1, [z, tf.ones([self.num_factors, 1])])
-        piu = tf.concat(1, [tf.ones([self.num_factors, 1]), 1.0 - z])
+        pil = tf.concat(1, [z, tf.ones([self.n_factors, 1])])
+        piu = tf.concat(1, [tf.ones([self.n_factors, 1]), 1.0 - z])
         # cumulative product along 1st axis
         S = tf.pack([cumprod(piu_x) for piu_x in tf.unpack(piu)])
         return [S * pil]
@@ -520,8 +520,8 @@ class Multinomial(Likelihood):
     def sample(self, size=1):
         """z ~ q(z | lambda)"""
         pi = self.pi.eval()
-        z = np.zeros((size, self.num_vars))
-        for i in range(self.num_factors):
+        z = np.zeros((size, self.n_vars))
+        for i in range(self.n_factors):
             z[:, (i*self.K):((i+1)*self.K)] = multinomial.rvs(1, pi[i, :],
                                                               size=size)
 
@@ -531,7 +531,7 @@ class Multinomial(Likelihood):
         """log q(z_i | lambda)"""
         # Note this calculates the log density with respect to z_i,
         # which is the ith factor and not the ith latent variable.
-        if i >= self.num_factors:
+        if i >= self.n_factors:
             raise IndexError()
 
         return multinomial.logpmf(zs[:, (i*self.K):((i+1)*self.K)],
@@ -547,16 +547,16 @@ class Normal(Likelihood):
     """
     def __init__(self, *args, **kwargs):
         Likelihood.__init__(self, *args, **kwargs)
-        self.num_vars = self.num_factors
-        self.num_params = 2*self.num_factors
+        self.n_vars = self.n_factors
+        self.n_params = 2*self.n_factors
         self.sample_tensor = True
 
         self.m = None
         self.s = None
 
     def mapping(self, x):
-        mean = Variable("mu", [self.num_vars])
-        stddev = Variable("sigma", [self.num_vars])
+        mean = Variable("mu", [self.n_vars])
+        stddev = Variable("sigma", [self.n_vars])
         return [tf.identity(mean), tf.nn.softplus(stddev)]
 
     def set_params(self, params):
@@ -576,7 +576,7 @@ class Normal(Likelihood):
         eps = sample_noise() ~ s(eps)
         s.t. z = reparam(eps; lambda) ~ q(z | lambda)
         """
-        return tf.random_normal((size, self.num_vars))
+        return tf.random_normal((size, self.n_vars))
 
     def reparam(self, eps):
         """
@@ -587,7 +587,7 @@ class Normal(Likelihood):
 
     def log_prob_zi(self, i, zs):
         """log q(z_i | lambda)"""
-        if i >= self.num_factors:
+        if i >= self.n_factors:
             raise IndexError()
 
         mi = self.m[i]
@@ -605,16 +605,16 @@ class PointMass(Likelihood):
     where lambda = params. Dirac(x; p) is the Dirac delta distribution
     with density equal to 1 if x == p and 0 otherwise.
     """
-    def __init__(self, num_vars=1, transform=tf.identity):
+    def __init__(self, n_vars=1, transform=tf.identity):
         Likelihood.__init__(self, 1)
-        self.num_vars = num_vars
-        self.num_params = num_vars
+        self.n_vars = n_vars
+        self.n_params = n_vars
         self.transform = transform
         self.params = None
         self.sample_tensor = True
 
     def mapping(self, x):
-        params = Variable("params", [self.num_vars])
+        params = Variable("params", [self.n_vars])
         return [self.transform(params)]
 
     def set_params(self, params):
@@ -637,7 +637,7 @@ class PointMass(Likelihood):
 
     def log_prob_zi(self, i, zs):
         """log q(z_i | lambda)"""
-        if i >= self.num_factors:
+        if i >= self.n_factors:
             raise IndexError()
 
         # a vector where the jth element is 1 if zs[j, i] is equal to
@@ -645,8 +645,8 @@ class PointMass(Likelihood):
         return tf.cast(tf.equal(zs[:, i], self.params[i]), dtype=tf.float32)
 
 class LocalPointMass(PointMass):
-    def __init__(self, num_local_vars, local_transform=tf.identity):
-        PointMass.__init__(self, num_local_vars, local_transform)
+    def __init__(self, n_local_vars, local_transform=tf.identity):
+        PointMass.__init__(self, n_local_vars, local_transform)
         self.is_local = True
 
     def sample(self, indices, size=1):

@@ -19,7 +19,7 @@ class PythonModel:
     Model wrapper for models written in NumPy/SciPy.
     """
     def __init__(self):
-        self.num_vars = None
+        self.n_vars = None
 
     def log_prob(self, xs, zs):
         return tf.py_func(self._py_log_prob, [xs, zs], [tf.float32])[0]
@@ -76,7 +76,7 @@ class StanModel:
             self.model = pystan.stan(model_code=self.model_code,
                                      data=xs, iter=1, chains=1)
 
-        self.num_vars = sum([sum(dim) if sum(dim) != 0 else 1 \
+        self.n_vars = sum([sum(dim) if sum(dim) != 0 else 1 \
                              for dim in self.model.par_dims])
         self.flag_init = True
 
@@ -131,7 +131,7 @@ class PyMC3Model:
         self.logp = bij.mapf(model.fastlogp)
         self.dlogp = bij.mapf(model.fastdlogp(vars))
 
-        self.num_vars = len(vars)
+        self.n_vars = len(vars)
 
     def log_prob(self, xs, zs):
         return tf.py_func(self._py_log_prob, [xs, zs], [tf.float32])[0]

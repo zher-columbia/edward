@@ -47,9 +47,9 @@ class BayesianNN:
         self.nonlinearity = nonlinearity
         self.lik_variance = lik_variance
 
-        self.num_layers = len(layer_sizes)
+        self.n_layers = len(layer_sizes)
         self.weight_dims = zip(layer_sizes[:-1], layer_sizes[1:])
-        self.num_vars = sum((m+1)*n for m, n in self.weight_dims)
+        self.n_vars = sum((m+1)*n for m, n in self.weight_dims)
 
     def unpack_weights(self, z):
         """Unpack weight matrices and biases from a flattened vector."""
@@ -70,7 +70,7 @@ class BayesianNN:
             n_data x D
 
         z : tf.tensor
-            num_vars
+            n_vars
 
         Returns
         -------
@@ -112,7 +112,7 @@ def build_toy_dataset(n_data=40, noise_std=0.1):
 ed.set_seed(42)
 model = BayesianNN(layer_sizes=[1, 10, 10, 1], nonlinearity=rbf)
 variational = Variational()
-variational.add(Normal(model.num_vars))
+variational.add(Normal(model.n_vars))
 data = build_toy_dataset()
 
 # Set up figure
@@ -136,7 +136,7 @@ for t in range(1000):
         mean, std = sess.run([variational.layers[0].m,
                               variational.layers[0].s])
         rs = np.random.RandomState(0)
-        zs = rs.randn(10, variational.num_vars) * std + mean
+        zs = rs.randn(10, variational.n_vars) * std + mean
         zs = tf.constant(zs, dtype=tf.float32)
         inputs = np.linspace(-8, 8, num=400, dtype=np.float32)
         x = tf.expand_dims(tf.constant(inputs), 1)
