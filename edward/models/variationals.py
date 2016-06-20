@@ -30,7 +30,7 @@ class Variational:
                                    for layer in self.layers])
             self.sample_tensor = [layer.sample_tensor for layer in self.layers]
 
-    def add(self, layer):
+    def add(self, layer, is_local = False):
         """
         Adds a layer instance on top of the layer stack.
 
@@ -38,6 +38,7 @@ class Variational:
         ----------
             layer: layer instance.
         """
+        layer.is_local = is_local
         self.layers += [layer]
         self.n_factors += layer.n_factors
         self.n_vars += layer.n_vars
@@ -47,7 +48,7 @@ class Variational:
         self.is_normal = self.is_normal and isinstance(layer, Normal)
         self.sample_tensor += [layer.sample_tensor]
 
-    def sample(self, x, size=1, indices=None):
+    def sample(self, x, n_samples=1, indices=None):
         """
         Draws a mix of tensors and placeholders, corresponding to
         TensorFlow-based samplers and SciPy-based samplers depending
@@ -56,7 +57,7 @@ class Variational:
         Parameters
         ----------
         x : Data
-        size : int, optional
+        n_samples : int, optional
         indices : optional
 
         Returns
@@ -80,15 +81,15 @@ class Variational:
         for layer in self.layers:
             if layer.sample_tensor:
                 if layer.is_local:
-                    samples += [layer.sample(indices,size)]
+                    samples += [layer.sample(n_samples,indices)]
                 else:
-                    samples += [layer.sample(size)]
+                    samples += [layer.sample(n_samples)]
             else:
-                samples += [tf.placeholder(tf.float32, (size, layer.n_vars))]
+                samples += [tf.placeholder(tf.float32, (n_samples, layer.n_vars))]
 
         return tf.concat(1, samples), samples
 
-    def np_sample(self, samples, size=1):
+    def np_sample(self, samples, n_samples=1):
         """
         Form dictionary to feed any placeholders with np.array
         samples.
@@ -96,7 +97,7 @@ class Variational:
         feed_dict = {}
         for sample,layer in zip(samples, self.layers):
             if sample.name.startswith('Placeholder'):
-                feed_dict[sample] = layer.sample(size)
+                feed_dict[sample] = layer.sample(n_samples)
 
         return feed_dict
 
@@ -199,7 +200,7 @@ class Likelihood:
     def print_params(self):
         raise NotImplementedError()
 
-    def sample_noise(self, size=1):
+    def sample_noise(self, n_samples=1):
         """
         eps = sample_noise() ~ s(eps)
         s.t. z = reparam(eps; lambda) ~ q(z | lambda)
@@ -207,7 +208,7 @@ class Likelihood:
         Returns
         -------
         np.ndarray
-            size x dim(lambda) array of type np.float32, where each
+            n_samples x dim(lambda) array of type np.float32, where each
             row is a sample from q.
 
         Notes
@@ -225,14 +226,14 @@ class Likelihood:
         """
         raise NotImplementedError()
 
-    def sample(self, size=1):
+    def sample(self, n_samples=1):
         """
         z ~ q(z | lambda)
 
         Returns
         -------
         np.ndarray
-            size x dim(z) array of type np.float32, where each
+            n_samples x dim(z) array of type np.float32, where each
             row is a sample from q.
 
         Notes
@@ -244,7 +245,7 @@ class Likelihood:
         The method defaults to sampling noise and reparameterizing it
         (which will raise an error if this is not possible).
         """
-        return self.reparam(self.sample_noise(size))
+        return self.reparam(self.sample_noise(n_samples))
 
     def log_prob_zi(self, i, zs):
         """
@@ -304,12 +305,12 @@ class Bernoulli(Likelihood):
         print("probability:")
         print(p)
 
-    def sample(self, size=1):
+    def sample(self, n_samples=1):
         """z ~ q(z | lambda)"""
         p = self.p.eval()
-        z = np.zeros((size, self.n_vars))
+        z = np.zeros((n_samples, self.n_vars))
         for d in range(self.n_vars):
-            z[:, d] = bernoulli.rvs(p[d], size=size)
+            z[:, d] = bernoulli.rvs(p[d], size=n_samples)
 
         return z
 
@@ -354,13 +355,13 @@ class Beta(Likelihood):
         print("scale:")
         print(b)
 
-    def sample(self, size=1):
+    def sample(self, n_samples=1):
         """z ~ q(z | lambda)"""
         sess = get_session()
         a, b = sess.run([self.a, self.b])
-        z = np.zeros((size, self.n_vars))
+        z = np.zeros((n_samples, self.n_vars))
         for d in range(self.n_vars):
-            z[:, d] = beta.rvs(a[d], b[d], size=size)
+            z[:, d] = beta.rvs(a[d], b[d], size=n_samples)
 
         return z
 
@@ -401,13 +402,13 @@ class Dirichlet(Likelihood):
         print("concentration vector:")
         print(alpha)
 
-    def sample(self, size=1):
+    def sample(self, n_samples=1):
         """z ~ q(z | lambda)"""
         alpha = self.alpha.eval()
-        z = np.zeros((size, self.n_vars))
+        z = np.zeros((n_samples, self.n_vars))
         for i in range(self.n_factors):
             z[:, (i*self.K):((i+1)*self.K)] = dirichlet.rvs(alpha[i, :],
-                                                            size=size)
+                                                            size=n_samples)
 
         return z
 
@@ -455,13 +456,13 @@ class InvGamma(Likelihood):
         print("scale:")
         print(b)
 
-    def sample(self, size=1):
+    def sample(self, n_samples=1):
         """z ~ q(z | lambda)"""
         sess = get_session()
         a, b = sess.run([self.a, self.b])
-        z = np.zeros((size, self.n_vars))
+        z = np.zeros((n_samples, self.n_vars))
         for d in range(self.n_vars):
-            z[:, d] = invgamma.rvs(a[d], b[d], size=size)
+            z[:, d] = invgamma.rvs(a[d], b[d], size=n_samples)
 
         return z
 
@@ -517,13 +518,13 @@ class Multinomial(Likelihood):
         print("probability vector:")
         print(pi)
 
-    def sample(self, size=1):
+    def sample(self, n_samples=1):
         """z ~ q(z | lambda)"""
         pi = self.pi.eval()
-        z = np.zeros((size, self.n_vars))
+        z = np.zeros((n_samples, self.n_vars))
         for i in range(self.n_factors):
             z[:, (i*self.K):((i+1)*self.K)] = multinomial.rvs(1, pi[i, :],
-                                                              size=size)
+                                                              size=n_samples)
 
         return z
 
@@ -571,12 +572,12 @@ class Normal(Likelihood):
         print("std dev:")
         print(s)
 
-    def sample_noise(self, size=1):
+    def sample_noise(self, n_samples=1):
         """
         eps = sample_noise() ~ s(eps)
         s.t. z = reparam(eps; lambda) ~ q(z | lambda)
         """
-        return tf.random_normal((size, self.n_vars))
+        return tf.random_normal((n_samples, self.n_vars))
 
     def reparam(self, eps):
         """
@@ -610,7 +611,7 @@ class PointMass(Likelihood):
         self.n_vars = n_vars
         self.n_params = n_vars
         self.transform = transform
-        self.params = None
+        self.sample_tensor = False
         self.sample_tensor = True
 
     def mapping(self, x):
@@ -628,12 +629,15 @@ class PointMass(Likelihood):
         print("parameter values:")
         print(params)
 
-    def sample(self, size=1):
-        # Return a matrix where each row is the same set of
-        # parameters. This is to be compatible with probability model
-        # methods which assume the input is possibly a mini-batch of
-        # parameter samples (as in black box variational methods).
-        return tf.pack([self.params]*size)
+    def sample(self, n_samples=1, indices= None):
+        if indices == None:
+            return tf.pack([self.params]*n_samples)
+        else:
+            return tf.pack([tf.gather(self.params,indices)]*n_samples)
+
+    def fake_sample(self,n_samples, indices = None):
+        params = self.params.eval()
+        return params.reshape(len(params),1)
 
     def log_prob_zi(self, i, zs):
         """log q(z_i | lambda)"""
@@ -643,19 +647,4 @@ class PointMass(Likelihood):
         # a vector where the jth element is 1 if zs[j, i] is equal to
         # the ith parameter, 0 otherwise
         return tf.cast(tf.equal(zs[:, i], self.params[i]), dtype=tf.float32)
-
-class LocalPointMass(PointMass):
-    def __init__(self, n_local_vars, local_transform=tf.identity):
-        PointMass.__init__(self, n_local_vars, local_transform)
-        self.is_local = True
-
-    def sample(self, indices, size=1):
-        # Return a matrix where each row is the same set of
-        # parameters. This is to be compatible with probability model
-        # methods which assume the input is possibly a mini-batch of
-        # parameter samples (as in black box variational methods).
-        print(size)
-        if size >1:
-            raise ValueError("Not implemented for size >1.")
-        return tf.pack([tf.gather(self.params,indices)]*size)
 

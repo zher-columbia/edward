@@ -42,15 +42,14 @@ class MatrixFactorization:
         regularization parameter, ridge penalty, scale parameter.
     """
     def __init__(self, N, M=None, K=10, lik_variance=0.01, prior_variance=0.01):
-        self.N = N
+        self.n_rows = N
         if not M:
             M = N
-        self.M = M
+        self.n_cols = M
         self.K = K
         self.lik_variance = lik_variance
         self.prior_variance = prior_variance
-        self.num_vars = 0
-        self.num_local_vars = M*K + N*K
+        self.n_local_vars = M*K + N*K
 
     def map_data_indices(self, data_indices):
         """
@@ -102,10 +101,10 @@ class MatrixFactorization:
         a_indices = []
         b_indices = []
         for l in data_indices:
-            i = l/self.M
-            j = l%self.M
+            i = l/self.n_cols
+            j = l%self.n_cols
             a_indices = a_indices + list(range(i*self.K,(i+1)*self.K))
-            b_indices = b_indices + list(range((self.N+j)*self.K,(self.N+j+1)*self.K))
+            b_indices = b_indices + list(range((self.n_rows+j)*self.K,(self.n_rows+j+1)*self.K))
         return a_indices + b_indices
 
     def log_prob(self, xs, zs, n_minibatch):
@@ -115,23 +114,26 @@ class MatrixFactorization:
         a = tf.reshape(zs[:,:n_minibatch*self.K],[n_minibatch,self.K])
         b = tf.reshape(zs[:,n_minibatch*self.K:],[n_minibatch,self.K])
         mus = tf.matmul(tf.mul(a,b),tf.ones([self.K,1]))
+        #mus = tf.convert_to_tensor(mus,dtype=tf.float64)
         # broadcasting to do mus - y (n_data x n_minibatch - n_data)
-        log_lik = -tf.reduce_sum(tf.pow(mus - xs, 2), [0,1]) / self.lik_variance
-        return log_lik + log_prior *n_minibatch/self.N/self.M
+        #log_lik = -tf.reduce_sum(tf.pow(mus - xs, 2), [0,1]) / self.lik_variance
+        log_lik = tf.reduce_sum( norm.logpdf(xs,mus))/n_minibatch*self.n_rows*self.n_cols
+        return log_lik + log_prior 
+        #return log_prior
 
 def build_toy_dataset(N=10,K=2, noise_std=0.1):
     ed.set_seed(0)
     a = tf.constant(np.random.randn(N, K))
     b = tf.constant(np.random.randn(N, K))
     noise = tf.constant(np.random.randn(N,N)*0.1)
-    data = tf.matmul(a,b,transpose_b=True) + noise
+    data = tf.to_float(tf.matmul(a,b,transpose_b=True) + noise)
     return ed.Data(data), a, b
 
 ed.set_seed(42)
 N = 300
-K = 5
+K = 2 
 data, a, b = build_toy_dataset(N,K)
 model = MatrixFactorization(N,K)
 
-inference = ed.MAP(model, data, n_minibatch =1,data_samples=N*N)
-inference.run(n_iter=500*N*N, n_print=10)
+inference = ed.MAP(model, data)
+inference.run(n_iter=500, n_print=10, n_minibatch=100,optimizer='gradient descent', learning_rate = '0.0001')

@@ -62,16 +62,19 @@ class Data:
         else:
             raise NotImplementedError()
 
-    def sample(self, n_data=None, return_indices = False):
+    def sample(self, n_minibatch=None, return_indices = False):
         # TODO
         # In general, there should be a scale factor due to data
         # subsampling, so that
-        # log_lik \approx self.N / n_data * ( mini-batch log_lik )
-        if n_data is None or self.data is None:
-            return self.data
+        # log_lik \approx self.N / n_minibatch * ( mini-batch log_lik )
+        if n_minibatch is None or self.data is None:
+            if return_indices == True:
+                return xrange(self.N), self.data
+            else:
+                return self.data
 
         if isinstance(self.data, tf.Tensor):
-            counter_new = self.counter + n_data
+            counter_new = self.counter + n_minibatch
             if counter_new <= self.N:
                 indices = list(range(self.counter, counter_new))
                 minibatch = tf.gather(self.data, indices)
@@ -86,12 +89,12 @@ class Data:
             else:
                 return minibatch
         elif isinstance(self.data, np.ndarray):
-            counter_new = self.counter + n_data
+            counter_new = self.counter + n_minibatch
             if counter_new <= self.N:
                 indices = list(range(self.counter, counter_new))
                 minibatch = self.data[self.counter:counter_new]
             else:
-                counter_new = counter_new - self.N
+        
                 indices = list(range(self.counter, self.N)) + list(range(0, counter_new))
                 minibatch = np.concatenate((self.data[self.counter:],
                                             self.data[:counter_new]))
@@ -106,7 +109,7 @@ class Data:
                 minibatch = [0]*len(self.data)
                 indices = [0]*len(self.data)
                 for i in range(len(self.data)):
-                    counter_new = self.counter[i] + n_data
+                    counter_new = self.counter[i] + n_minibatch
                     if counter_new <= self.N[i]:
                         indices[i] = list(range(self.counter, counter_new))
                         minibatch[i] = self.data[i][self.counter[i]:counter_new]

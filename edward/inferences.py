@@ -3,7 +3,7 @@ import numpy as np
 import tensorflow as tf
 
 from edward.data import Data
-from edward.models import Variational, PointMass, LocalPointMass
+from edward.models import Variational, PointMass
 from edward.util import kl_multivariate_normal, log_sum_exp, get_session
 
 try:
@@ -107,9 +107,9 @@ class VariationalInference(Inference):
 
         elif optimizer == 'gradient descent':
             learning_rate = learning_rate
-            #global_step = tf.Variable(1, trainable=False)
+            global_step = tf.Variable(1, trainable=False)
             optimizer = tf.train.GradientDescentOptimizer(learning_rate)
-            self.train = optimizer.minimize(loss)#, global_step=global_step)
+            self.train = optimizer.minimize(loss, global_step=global_step)
 
         elif optimizer == None:
             # Use ADAM with a decaying scale factor
@@ -362,22 +362,32 @@ class MAP(VariationalInference):
     """
     Maximum a posteriori
     """
-    def __init__(self, model, data=Data(), n_minibatch=100, n_samples=100, transform=tf.identity, local_transform=tf.identity):
+    def __init__(self, model, data=Data(), transform=tf.identity, local_transform=tf.identity):
         variational = Variational()
         if hasattr(model, 'n_vars'):
             variational.add(PointMass(model.n_vars, transform))
-        else:
-            variational.add(PointMass(0, transform))
+        if hasattr(model, 'n_local_vars'):
+            variational.add(PointMass(model.n_local_vars, local_transform),is_local=True )
+        if (not hasattr(model,'n_vars')) and (not hasattr(model,'n_local_vars')):
+             variational.add(PointMass(0, transform))
 
         VariationalInference.__init__(self, model, variational, data)
-        self.n_minibatch = n_minibatch
+
+    def dupdate(self):
+        sess = get_session()
+        feed_dict = self.variational.np_sample(None, self.n_samples)
+        _, loss = sess.run([self.train, self.loss], feed_dict)
+        return loss
 
     def build_loss(self):
         data_indices, x = self.data.sample(self.n_minibatch,return_indices=True)
         if hasattr(self.model, 'map_data_indices'):
             indices = self.model.map_data_indices(data_indices)
+            z,_ = self.variational.sample(x,1,indices)
+            self.loss = tf.squeeze(self.model.log_prob(x, z,self.n_minibatch))
         else:
             indices = data_indices
-        z, _ = self.variational.sample(x,1,indices)
-        self.loss = tf.squeeze(self.model.log_prob(x, z))
+            z,_ = self.variational.sample(x,1,indices)
+            self.loss = tf.squeeze(self.model.log_prob(x, z))
         return -self.loss
+
