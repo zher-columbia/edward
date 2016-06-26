@@ -57,12 +57,15 @@ class VariationalInference(Inference):
     def __init__(self, model, variational, data=Data()):
         Inference.__init__(self, model, data)
         self.variational = variational
+        self.is_initialized = False
 
     def run(self, *args, **kwargs):
         """
         A simple wrapper to run the inference algorithm.
         """
-        self.initialize(*args, **kwargs)
+        if not self.is_initialized:
+            self.initialize(*args, **kwargs)
+            self.is_initialized = True
         for t in range(self.n_iter):
             loss = self.update()
             self.print_progress(t, loss)

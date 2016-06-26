@@ -3,11 +3,11 @@ import edward as ed
 import tensorflow as tf
 import numpy as np
 
-from edward.models import PythonModel, Variational
+from edward.models import Variational
 from edward.stats import norm, poisson
 
 
-class LogbilinearNetworkModel(PythonModel):
+class LogbilinearNetworkModel():
     """
     p(x, z) = [ prod_{i=1}^N prod_{j=1}^N Poi(Y_{ij}; \exp(s_iTt_j) ) ]
               [ prod_{i=1}^N N(s_i; 0, var) N(t_i; 0, var) ]
@@ -23,7 +23,7 @@ class LogbilinearNetworkModel(PythonModel):
         self.prior_variance = var
 
 
-    def p_log_prob(self, xs, zs):
+    def log_prob(self, xs, zs):
         """Returns a vector [log p(xs, zs[1,:]), ..., log p(xs, zs[S,:])]."""
         log_prior = -self.prior_variance * tf.reduce_sum(zs*zs)
         # reshaping the latent variable
@@ -33,13 +33,13 @@ class LogbilinearNetworkModel(PythonModel):
         log_lik = tf.reduce_sum( poisson.logpmf(xs,xp))
         return log_lik + log_prior
 
-    def log_prob(self, xs, zs):
+    def n_log_prob(self, xs, zs):
         """Returns a vector [log p(xs, zs[1,:]), ..., log p(xs, zs[S,:])]."""
         log_prior = -self.prior_variance * tf.reduce_sum(zs*zs)
         # reshaping the latent variable
         s = tf.reshape(zs[:,:self.n_rows*self.K],[self.n_rows,self.K])
         t = tf.reshape(zs[:,self.n_cols*self.K:],[self.n_cols,self.K])
-        xp = tf.reshape(tf.matmul(s,t,transpose_b = True), [N*N,1])
+        xp = tf.reshape(tf.matmul(s,t,transpose_b = True), [self.n_rows*self.n_cols,1])
         log_lik = tf.reduce_sum( norm.logpdf(xs,xp))
         return log_lik + log_prior
 
@@ -64,7 +64,7 @@ ed.set_seed(42)
 N = 300
 K = 2
 #data, a, b = build_toy_poisson_dataset(N,K)
-data, a, b = build_toy_dataset(N,K)
+data, a, b = build_toy_poisson_dataset(N,K)
 model = LogbilinearNetworkModel(N,N,K)
 
 inference = ed.MAP(model, data)
